@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Segmentation d'Image</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #0056b3;
+        }
+        form {
+            margin-bottom: 20px;
+            border: 1px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+        }
+        input[type="file"] {
+            margin-bottom: 10px;
+        }
+        input[type="submit"] {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .message {
+            color: green;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .image-display {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .image-display div {
+            text-align: center;
+            margin: 10px;
+        }
+        .image-display img {
+            max-width: 350px;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+            background: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Application de Segmentation d'Image</h1>
+
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <p>Sélectionnez une image à segmenter :</p>
+            <input type="file" name="file" accept="image/*">
+            <br>
+            <input type="submit" value="Uploader et Segmenter">
+        </form>
+
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+
+        {% if message %}
+            <p class="message">{{ message }}</p>
+        {% endif %}
+
+        <div class="image-display">
+            {% if uploaded_image %}
+                <div>
+                    <h2>Image Originale</h2>
+                    <img src="{{ uploaded_image }}" alt="Image Uploadée">
+                </div>
+            {% endif %}
+
+            {% if mask_image %}
+                <div>
+                    <h2>Masque de Segmentation</h2>
+                    <img src="{{ mask_image }}" alt="Masque de Segmentation">
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
