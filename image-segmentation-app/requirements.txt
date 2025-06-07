@@ -1,18 +1,6 @@
-# Web Framework
-Flask==2.3.3 # Ou la dernière version stable de Flask 2.x
-
-# WSGI Server pour le déploiement sur Render
-gunicorn==21.2.0
-
-# Traitement d'images et données numériques
-numpy==1.26.4 # Version récente compatible avec TF et scikit-image
-Pillow==10.2.0 # Pour la manipulation d'images (ouverture, redimensionnement, etc.)
-scikit-image==0.22.0 # Version plus récente qui devrait être compatible. Si problème, essayer 0.19.3.
-h5py==3.10.0 # Indispensable pour charger votre modèle .h5
-
-# Machine Learning (TensorFlow et Keras)
-# Utilisez une version spécifique et stable de TensorFlow.
-# Keras est maintenant intégré à TensorFlow (tf.keras), donc souvent pas besoin de lister 'keras' séparément.
-tensorflow==2.16.1 # Version récente et stable de TensorFlow.
-# Si vous utilisez Keras 3.x comme bibliothèque séparée, ajoutez :
-# keras==3.0.0 # Vérifiez la compatibilité avec votre version de TensorFlow
+Flask==2.3.2
+tensorflow==2.12.0
+Pillow
+numpy
+scikit-image
+gunicorn
