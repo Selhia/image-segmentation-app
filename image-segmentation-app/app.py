@@ -1,12 +1,11 @@
 import os
 import numpy as np
 from flask import Flask, request, render_template, send_from_directory, url_for
-from tensorflow.keras.preprocessing.image import img_to_array, load_img
+from tensorflow.keras.preprocessing.image import img_to_array, load_img # Garder pour la préparation de l'image
 from PIL import Image
-from skimage.color import label2rgb # Pour une meilleure visualisation des masques multi-classes
+from skimage.color import label2rgb
+import tensorflow as tf # Importer TensorFlow
 
-# Importer la fonction d'architecture du modèle depuis le nouveau fichier
-from model_architecture import create_unet_resnet50
 
 app = Flask(__name__)
 
@@ -20,17 +19,17 @@ app.config['MASK_FOLDER'] = MASK_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(MASK_FOLDER, exist_ok=True)
 
-# --- Paramètres du modèle (selon votre notebook) ---
-MODEL_PATH = 'model/unet_resnet50_cityscapes.h5'
-INPUT_SHAPE = (256, 512, 3) # Hauteur, Largeur, Canaux (confirmé par le notebook)
-NUM_CLASSES = 8            # Nombre de classes (confirmé par le notebook)
+# --- Paramètres du modèle ---
+# Le INPUT_SHAPE reste le même, car votre modèle TFLite attend la même entrée
+INPUT_SHAPE = (256, 512, 3) # Hauteur, Largeur, Canaux
+NUM_CLASSES = 8            # Nombre de classes
 
-# --- Palette de couleurs pour Cityscapes (exemple, à ajuster si votre mapping diffère) ---
-# Ces couleurs sont les couleurs standard de Cityscapes, utiles pour la visualisation
-# La documentation de Cityscapes fournit une liste exhaustive des classes et de leurs couleurs.
-# Assurez-vous que l'ordre des couleurs correspond à l'ordre des classes de votre modèle.
+# --- Chemin du modèle TFLite ---
+MODEL_PATH_TFLITE = 'model/unet_resnet50_cityscapes.tflite' # NOUVEAU CHEMIN
+
+# --- Palette de couleurs pour Cityscapes (comme avant) ---
 CITYSCAPES_COLOR_PALETTE = [
-    (0, 0, 0),        # 0: arrière-plan / void (ou non pertinent)
+    (0, 0, 0),        # 0: arrière-plan / void
     (128, 64, 128),   # 1: route
     (244, 35, 232),   # 2: trottoir
     (70, 70, 70),     # 3: bâtiment
@@ -38,68 +37,84 @@ CITYSCAPES_COLOR_PALETTE = [
     (190, 153, 153),  # 5: clôture
     (153, 153, 153),  # 6: poteau
     (250, 170, 30),   # 7: panneau de signalisation
-    # Ajoutez d'autres couleurs si vous avez plus de classes définies par votre modèle
-    # Par exemple, pour les 19 classes courantes de Cityscapes, vous auriez besoin de plus:
-    # (220, 220, 0),  # 8: lumière
-    # (107, 142, 35), # 9: végétation
-    # etc.
+    # ... (autres si nécessaire)
 ]
 
-# --- Chargement du modèle ---
-model = None
-try:
-    # Reconstruire l'architecture comme dans le notebook
-    model = create_unet_resnet50(input_shape=INPUT_SHAPE, n_classes=NUM_CLASSES)
-    # Charger les poids
-    model.load_weights(MODEL_PATH)
-    # Compiler le modèle (non strictement nécessaire pour la prédiction seule, mais bonne pratique)
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-    print(f"Modèle '{MODEL_PATH}' chargé avec succès.")
-except Exception as e:
-    print(f"Erreur lors du chargement du modèle : {e}")
-    print("Vérifiez 'model_architecture.py' et la présence de 'unet_resnet50_cityscapes.h5'.")
-    model = None # S'assurer que le modèle est None en cas d'échec
+# --- Chargement du modèle TensorFlow Lite ---
+interpreter = None
+input_details = None
+output_details = None
 
-# --- Fonction de segmentation ---
+try:
+    interpreter = tf.lite.Interpreter(model_path=MODEL_PATH_TFLITE)
+    interpreter.allocate_tensors() # Alloue de la mémoire pour les tenseurs
+
+    # Récupérer les détails des tenseurs d'entrée et de sortie
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+
+    print(f"Modèle TensorFlow Lite '{MODEL_PATH_TFLITE}' chargé avec succès.")
+    print(f"Détails de l'entrée TFLite : {input_details}")
+    print(f"Détails de la sortie TFLite : {output_details}")
+
+except Exception as e:
+    print(f"Erreur lors du chargement du modèle TensorFlow Lite : {e}")
+    print("Vérifiez la présence de 'unet_resnet50_cityscapes.tflite' et l'intégrité du fichier.")
+    interpreter = None
+
+# --- Fonction de segmentation mise à jour pour TFLite ---
 def get_segmentation_mask(image_path, target_size=(INPUT_SHAPE[0], INPUT_SHAPE[1])):
-    if model is None:
-        return None, "Erreur: Le modèle n'a pas pu être chargé. Veuillez vérifier le serveur."
+    if interpreter is None:
+        return None, "Erreur: Le modèle TFLite n'a pas pu être chargé. Veuillez vérifier le serveur."
 
     try:
-        # Charger et prétraiter l'image pour qu'elle corresponde à l'entrée du modèle
+        # Charger et prétraiter l'image (comme avant)
         img = load_img(image_path, target_size=target_size)
         img_array = img_to_array(img)
         img_array = np.expand_dims(img_array, axis=0) # Ajoute la dimension du batch
-        img_array = img_array / 255.0 # Normalisation (si votre modèle a été entraîné avec cette normalisation)
 
-        # Effectuer la prédiction
-        prediction = model.predict(img_array)[0] # Récupère le masque prédit pour la première (et unique) image du batch
+        # Assurer que le type de données de l'entrée correspond à ce que le modèle TFLite attend
+        # Les modèles TFLite peuvent attendre des Float32 ou des UInt8 normalisés.
+        # Vérifiez input_details[0]['dtype']
+        input_dtype = input_details[0]['dtype']
+        if input_dtype == np.float32:
+            img_array = img_array / 255.0 # Normalisation pour les modèles Float32
+        elif input_dtype == np.uint8:
+            # Si le modèle attend des UInt8, assurez-vous que les valeurs sont entre 0 et 255
+            # et que le type est uint8. Pas de normalisation si c'est le cas.
+            img_array = img_array.astype(np.uint8)
 
-        # Post-traitement: Obtient l'indice de classe pour chaque pixel (np.argmax comme dans le notebook)
-        segmentation_map = np.argmax(prediction, axis=-1)
+        # Copier le tenseur d'entrée
+        interpreter.set_tensor(input_details[0]['index'], img_array)
+
+        # Exécuter l'inférence
+        interpreter.invoke()
+
+        # Récupérer le tenseur de sortie
+        prediction = interpreter.get_tensor(output_details[0]['index'])
+
+        # Post-traitement (comme avant, car la sortie est similaire)
+        # La sortie de TFLite sera [1, H, W, N_CLASSES], comme Keras
+        segmentation_map = np.argmax(prediction[0], axis=-1)
 
         # Conversion du masque de segmentation en une image RGB colorée
-        # Utilisez la palette définie pour Cityscapes.
-        # `bg_label=0` indique que la classe 0 est l'arrière-plan et ne devrait pas être colorée par label2rgb
-        # L'image originale `img_array[0]` peut être passée pour superposer le masque.
-        # `colors=np.array(CITYSCAPES_COLOR_PALETTE)/255.0` normalise les couleurs pour skimage.
         colored_mask = label2rgb(
             segmentation_map,
             colors=np.array(CITYSCAPES_COLOR_PALETTE)/255.0,
-            bg_label=0, # Si la classe 0 est l'arrière-plan/void
-            image=img_array[0], # L'image originale pour la superposition
-            alpha=0.5 # Opacité du masque superposé (ajuster selon préférence)
+            bg_label=0,
+            image=img_array[0].astype(np.float64) if input_dtype == np.float32 else img_array[0], # Passer l'image originale pour superposition (doit être float)
+            alpha=0.5
         )
-        colored_mask = (colored_mask * 255).astype(np.uint8) # Convertir en format 0-255
+        colored_mask = (colored_mask * 255).astype(np.uint8)
 
         mask_image = Image.fromarray(colored_mask)
 
-        return mask_image, None # Retourne l'image du masque PIL et aucune erreur
+        return mask_image, None
 
     except Exception as e:
-        return None, f"Erreur lors de la prédiction ou du traitement du masque : {e}"
+        return None, f"Erreur lors de la prédiction ou du traitement du masque TFLite : {e}"
 
-# --- Routes de l'application Flask ---
+# --- Routes de l'application Flask (restent les mêmes) ---
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -120,17 +135,15 @@ def upload_file():
         mask_image, error = get_segmentation_mask(filepath)
 
         if error:
-            os.remove(filepath) # Supprime l'image uploadée si la segmentation échoue
+            os.remove(filepath)
             return render_template('index.html', error=f"Erreur lors de la segmentation : {error}")
 
-        # Sauvegarder le masque généré
         mask_filename = "mask_" + filename
         mask_filepath = os.path.join(app.config['MASK_FOLDER'], mask_filename)
-        if mask_image.mode != 'RGB': # S'assurer que l'image est en RGB avant de sauvegarder
+        if mask_image.mode != 'RGB':
             mask_image = mask_image.convert('RGB')
         mask_image.save(mask_filepath)
 
-        # URLs pour les images à afficher dans le template
         uploaded_image_url = url_for('static', filename='images/uploads/' + filename)
         mask_image_url = url_for('static', filename='images/masks/' + mask_filename)
 
@@ -140,15 +153,10 @@ def upload_file():
                                message="Segmentation réussie !")
     return render_template('index.html', error="Erreur lors de l'upload.")
 
-# Route pour servir les fichiers statiques (images, CSS, JS)
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    # Permet de servir des fichiers depuis le dossier 'static'
     return send_from_directory(os.path.join(app.root_path, 'static'), filename)
-
 
 # --- Démarrage de l'application Flask ---
 if __name__ == '__main__':
-    # Utiliser 0.0.0.0 pour rendre l'application accessible depuis l'extérieur du conteneur Docker/Render
-    # Utiliser la variable d'environnement PORT fournie par Render, ou 5000 par défaut
     app.run(debug=True, host='0.0.0.0', port=os.environ.get('PORT', 5000))
