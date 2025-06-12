@@ -4,4 +4,4 @@ Pillow
 numpy
 scikit-image
 gunicorn
-h5py==3.10.0 # Indispensable pour charger votre modèle .h5
+h5py # Indispensable pour charger votre modèle .h5
