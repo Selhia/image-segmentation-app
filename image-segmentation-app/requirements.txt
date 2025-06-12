@@ -5,3 +5,4 @@ numpy
 scikit-image
 gunicorn
 h5py # Indispensable pour charger votre modèle .h5
+tflite-runtime
