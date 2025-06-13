@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 absl-py==2.3.0
 astunparse==1.6.3
 blinker==1.9.0
@@ -47,3 +48,13 @@ typing_extensions==4.14.0
 urllib3==2.4.0
 Werkzeug==3.1.3
 wrapt==1.17.2
+=======
+Flask==2.3.2
+tensorflow==2.16.1
+Pillow
+numpy
+scikit-image
+gunicorn
+h5py # Indispensable pour charger votre modèle .h5
+tflite-runtime
+>>>>>>> 501bd164c1d530bd8ac3226ebe3917919b15e90f

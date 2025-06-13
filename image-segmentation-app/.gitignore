@@ -1,25 +1,23 @@
-# Environnement virtuel Python
-venv/
-.venv/        # Au cas où vous utiliseriez .venv/ au lieu de venv/
-
-# Fichiers compilés Python
+# Python
 __pycache__/
-*.pyc
-*.pyd
-*.pyo
+*.py[cod]
+*.ipynb_checkpoints
 
-# Fichiers de configuration de l'éditeur (VS Code)
-.vscode/      # Si vous voulez ignorer le dossier .vscode entier
-# .vscode/settings.json # Si vous voulez ignorer des fichiers spécifiques de .vscode
+# Flask uploads
+app/static/images/uploads/
+app/static/images/masks/
 
-# Fichiers générés par l'OS (macOS)
-.DS_Store
+# Models
+*.h5
 
-# Fichiers de log ou temporaires
+# Environment
+.env
+venv/
+env/
 *.log
-*.tmp
-*.swp
-*.swo
 
-# Fichiers liés aux notebooks Jupyter
-.ipynb_checkpoints/
+# VS Code
+.vscode/
+
+# Render local cache
+*.render*
