@@ -1,2 +1,8 @@
 model/unet_resnet50_cityscapes.h5 filter=lfs diff=lfs merge=lfs -text
 *.tflite filter=lfs diff=lfs merge=lfs -text
+jour filter=lfs diff=lfs merge=lfs -text
+votre filter=lfs diff=lfs merge=lfs -text
+\# filter=lfs diff=lfs merge=lfs -text
+Cela filter=lfs diff=lfs merge=lfs -text
+mettra filter=lfs diff=lfs merge=lfs -text
+à filter=lfs diff=lfs merge=lfs -text
