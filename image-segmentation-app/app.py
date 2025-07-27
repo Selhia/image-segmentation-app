@@ -91,17 +91,15 @@ def get_segmentation_mask(image_path, target_size=(INPUT_SHAPE[0], INPUT_SHAPE[1
 
         segmentation_map = np.argmax(prediction[0], axis=-1)
 
-        colored_mask = label2rgb(
-        segmentation_map,
-        colors=np.array(CITYSCAPES_COLOR_PALETTE)/255.0,
-        bg_label=0,
-        image=(img_array[0] / 255.0) if input_dtype == np.uint8 else img_array[0],
-        alpha=0.5
-        )      
+# Créer une image RGB vide
+        h, w = segmentation_map.shape
+        rgb_mask = np.zeros((h, w, 3), dtype=np.uint8)
 
-        colored_mask = (colored_mask * 255).astype(np.uint8)
+        # Appliquer la couleur pour chaque classe
+        for class_idx, color in enumerate(CITYSCAPES_COLOR_PALETTE):
+            rgb_mask[segmentation_map == class_idx] = color
 
-        mask_image = Image.fromarray(colored_mask)
+        mask_image = Image.fromarray(rgb_mask)
 
         return mask_image, None
 
