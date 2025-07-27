@@ -5,9 +5,6 @@ from tensorflow.keras.preprocessing.image import img_to_array, load_img
 from PIL import Image
 from skimage.color import label2rgb
 import tensorflow as tf
-import requests   # <<< À AJOUTER
-import shutil     # <<< À AJOUTER
-
 
 app = Flask(__name__)
 
@@ -20,13 +17,14 @@ app.config['MASK_FOLDER'] = MASK_FOLDER
 # Créer les dossiers s'ils n'existent pas
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(MASK_FOLDER, exist_ok=True)
-# Assurez-vous que le dossier 'model' existe pour y sauvegarder le modèle téléchargé
-os.makedirs(os.path.join(app.root_path, 'model'), exist_ok=True) # <<< S'ASSURER QUE CETTE LIGNE EST PRÉSENTE
-
 
 # --- Paramètres du modèle ---
-INPUT_SHAPE = (256, 512, 3)
-NUM_CLASSES = 8
+INPUT_SHAPE = (256, 512, 3) # Hauteur, Largeur, Canaux
+NUM_CLASSES = 8            # Nombre de classes
+
+# --- Chemin du modèle TFLite ---
+# Chemin relatif au fichier app.py
+RELATIVE_MODEL_PATH_TFLITE = 'model/unet_resnet50_cityscapes.tflite'
 
 # --- Palette de couleurs pour Cityscapes (comme avant) ---
 CITYSCAPES_COLOR_PALETTE = [
@@ -38,17 +36,8 @@ CITYSCAPES_COLOR_PALETTE = [
     (190, 153, 153),  # 5: clôture
     (153, 153, 153),  # 6: poteau
     (250, 170, 30),   # 7: panneau de signalisation
-    # ... (le reste de votre palette)
+    # ... (autres si nécessaire, assurez-vous d'avoir 8 couleurs pour 8 classes si toutes utilisées)
 ]
-
-# --- Chemins du modèle TFLite ---
-LOCAL_MODEL_FILENAME = 'unet_resnet50_cityscapes.tflite'
-LOCAL_MODEL_PATH = os.path.join(app.root_path, 'model', LOCAL_MODEL_FILENAME)
-
-# >>> TRÈS IMPORTANT : REMPLACEZ CETTE URL PAR VOTRE VRAIE URL DE TÉLÉCHARGEMENT DIRECT <<<
-# Cette URL doit pointer directement vers le fichier .tflite que vous avez hébergé.
-# Exemples: un lien de partage direct de Google Drive, Hugging Face Hub (avec /resolve/), un serveur personnel, etc.
-EXTERNAL_MODEL_URL = 'https://we.tl/t-vukwmVLsRO' # <<< À MODIFIER
 
 # --- Chargement du modèle TensorFlow Lite ---
 interpreter = None
@@ -56,53 +45,43 @@ input_details = None
 output_details = None
 
 try:
-    # --- DÉBUT DU BLOC DE TÉLÉCHARGEMENT CONDITIONNEL ---
-    if not os.path.exists(LOCAL_MODEL_PATH):
-        print(f"DEBUG: Modèle TFLite non trouvé localement. Tentative de téléchargement depuis : {EXTERNAL_MODEL_URL}")
-        # Créez le dossier 'model' si absent, même si déjà fait en haut, c'est une sécurité
-        os.makedirs(os.path.dirname(LOCAL_MODEL_PATH), exist_ok=True)
-        with requests.get(EXTERNAL_MODEL_URL, stream=True) as r:
-            r.raise_for_status() # Lève une exception pour les codes d'erreur HTTP (4xx ou 5xx)
-            with open(LOCAL_MODEL_PATH, 'wb') as f:
-                shutil.copyfileobj(r.raw, f) # Écrit le contenu de la réponse directement dans le fichier
-        print(f"DEBUG: Modèle TFLite téléchargé avec succès vers : {LOCAL_MODEL_PATH}")
-    else:
-        print(f"DEBUG: Modèle TFLite déjà présent localement à : {LOCAL_MODEL_PATH}. Pas de nouveau téléchargement.")
-    # --- FIN DU BLOC DE TÉLÉCHARGEMENT CONDITIONNEL ---
+    # Construire le chemin absolu du modèle
+    # app.root_path est le chemin absolu du dossier contenant app.py
+    absolute_model_path = os.path.join(app.root_path, RELATIVE_MODEL_PATH_TFLITE)
+    
+    # DEBUG : Imprimer le chemin absolu que l'application essaie d'ouvrir
+    print(f"DEBUG: Tentative de chargement du modèle depuis le chemin absolu : {absolute_model_path}")
 
-    # Charger le modèle TFLite depuis le chemin local (qui est maintenant garanti d'exister)
-    interpreter = tf.lite.Interpreter(model_path=LOCAL_MODEL_PATH)
-    interpreter.allocate_tensors()
+    interpreter = tf.lite.Interpreter(model_path=absolute_model_path)
+    interpreter.allocate_tensors() # Alloue de la mémoire pour les tenseurs
 
     # Récupérer les détails des tenseurs d'entrée et de sortie
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
-    print(f"Modèle TensorFlow Lite '{LOCAL_MODEL_FILENAME}' chargé avec succès depuis {LOCAL_MODEL_PATH}.")
+    print(f"Modèle TensorFlow Lite '{RELATIVE_MODEL_PATH_TFLITE}' chargé avec succès depuis {absolute_model_path}.")
     print(f"Détails de l'entrée TFLite : {input_details}")
     print(f"Détails de la sortie TFLite : {output_details}")
 
 except Exception as e:
-    print(f"Erreur lors du téléchargement ou du chargement du modèle TensorFlow Lite : {e}")
-    print(f"Vérifiez l'URL '{EXTERNAL_MODEL_URL}' ou le chemin local '{LOCAL_MODEL_PATH}'.")
+    print(f"Erreur lors du chargement du modèle TensorFlow Lite : {e}")
+    print(f"Vérifiez la présence de '{RELATIVE_MODEL_PATH_TFLITE}' à la racine du projet et l'intégrité du fichier.")
     interpreter = None
 
-# --- Reste du code (get_segmentation_mask, routes, etc.) est correct tel quel dans app-2.py ---
-
-# La fonction get_segmentation_mask utilise 'interpreter' et 'input_details'/'output_details'
-# comme dans votre app-2.py actuel, ce qui est correct.
+# --- Fonction de segmentation mise à jour pour TFLite ---
 def get_segmentation_mask(image_path, target_size=(INPUT_SHAPE[0], INPUT_SHAPE[1])):
     if interpreter is None:
         return None, "Erreur: Le modèle TFLite n'a pas pu être chargé. Veuillez vérifier le serveur."
 
     try:
+        # Charger et prétraiter l'image (comme avant)
         img = load_img(image_path, target_size=target_size)
         img_array = img_to_array(img)
-        img_array = np.expand_dims(img_array, axis=0)
+        img_array = np.expand_dims(img_array, axis=0) # Ajoute la dimension du batch
 
         input_dtype = input_details[0]['dtype']
         if input_dtype == np.float32:
-            img_array = img_array / 255.0
+            img_array = img_array / 255.0 # Normalisation pour les modèles Float32
         elif input_dtype == np.uint8:
             img_array = img_array.astype(np.uint8)
 
@@ -113,12 +92,13 @@ def get_segmentation_mask(image_path, target_size=(INPUT_SHAPE[0], INPUT_SHAPE[1
         segmentation_map = np.argmax(prediction[0], axis=-1)
 
         colored_mask = label2rgb(
-            segmentation_map,
-            colors=np.array(CITYSCAPES_COLOR_PALETTE)/255.0,
-            bg_label=0,
-            image=img_array[0].astype(np.float64) if input_dtype == np.float32 else img_array[0],
-            alpha=0.5
-        )
+        segmentation_map,
+        colors=np.array(CITYSCAPES_COLOR_PALETTE)/255.0,
+        bg_label=0,
+        image=(img_array[0] / 255.0) if input_dtype == np.uint8 else img_array[0],
+        alpha=0.5
+        )      
+
         colored_mask = (colored_mask * 255).astype(np.uint8)
 
         mask_image = Image.fromarray(colored_mask)
